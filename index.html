@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Local AI Chat</title>
+<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- LEFT PANE: SIDEBAR -->
+  <aside class="sidebar">
+
+    <!-- TOP ZONE: GLOBAL MODEL SELECTOR -->
+    <div class="sidebar-zone zone-model">
+      <select id="model-select" aria-label="Active model">
+        <option value="" disabled selected>No models available</option>
+      </select>
+    </div>
+
+    <!-- MIDDLE ZONE: CHAT LIST -->
+    <div class="sidebar-zone zone-chats">
+      <div class="zone-chats-header">
+        <span class="zone-label">Chats</span>
+        <button id="new-chat-btn" class="icon-btn" type="button" title="Start a new chat">+</button>
+      </div>
+      <ul id="chat-list" class="chat-list">
+        <!-- chat items injected here -->
+      </ul>
+      <p id="chat-list-empty" class="empty-hint" hidden>No chats yet. Send a message to start one.</p>
+    </div>
+
+    <!-- BOTTOM ZONE: PROVIDER MANAGEMENT -->
+    <div class="sidebar-zone zone-providers">
+      <button id="add-provider-btn" class="add-provider-btn" type="button">(+) Add Provider</button>
+      <ul id="provider-list" class="provider-list">
+        <!-- provider rows injected here -->
+      </ul>
+      <p id="provider-list-empty" class="empty-hint" hidden>No providers configured yet.</p>
+    </div>
+
+  </aside>
+
+  <!-- RIGHT PANE: ACTIVE CONVERSATION -->
+  <main class="conversation">
+    <div id="message-stream" class="message-stream">
+      <p id="stream-empty" class="empty-hint centered">Ask a question to begin.</p>
+    </div>
+
+    <form id="composer" class="composer" autocomplete="off">
+      <textarea
+        id="composer-input"
+        class="composer-input"
+        placeholder="Send a message..."
+        rows="1"
+        aria-label="Message input"
+      ></textarea>
+      <button id="composer-send" class="send-btn" type="submit" title="Send message">Send</button>
+    </form>
+  </main>
+
+</div>
+
+<!-- PROVIDER CONFIG OVERLAY -->
+<div id="provider-overlay" class="overlay" hidden>
+  <div class="overlay-panel">
+    <h2 id="provider-form-title" class="overlay-title">Add Provider</h2>
+    <form id="provider-form">
+      <label class="field-label" for="provider-name">Display Name</label>
+      <input id="provider-name" class="field-input" type="text" placeholder="e.g. Groq" required />
+
+      <label class="field-label" for="provider-url">Base URL</label>
+      <input id="provider-url" class="field-input" type="text" placeholder="https://api.groq.com/openai/v1" required />
+
+      <label class="field-label" for="provider-key">API Key</label>
+      <input id="provider-key" class="field-input" type="password" placeholder="sk-..." />
+
+      <div class="overlay-actions">
+        <button type="button" id="provider-delete-btn" class="text-btn danger" hidden>Delete</button>
+        <div class="overlay-actions-right">
+          <button type="button" id="provider-cancel-btn" class="text-btn">Cancel</button>
+          <button type="submit" class="primary-btn">Save</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
