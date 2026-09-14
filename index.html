@@ -9,8 +9,14 @@
 </head>
 <body>
   <div class="shell">
+    <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-label="Toggle sidebar" aria-expanded="true">☰</button>
+    <div id="app-status" class="status-banner" role="status" aria-live="polite" hidden></div>
+
     <aside class="sidebar">
       <div class="sidebar-zone zone-model">
+        <div class="model-search-wrap">
+          <input id="model-search" class="model-search" type="search" placeholder="Search models..." aria-label="Search models" />
+        </div>
         <select id="model-select" aria-label="Active model">
           <option value="" disabled selected>No models available</option>
         </select>
@@ -21,24 +27,25 @@
           <span class="zone-label">Chats</span>
           <button id="new-chat-btn" class="icon-btn" type="button" title="Start a new chat">+</button>
         </div>
-        <ul id="chat-list" class="chat-list">
-          </ul>
+        <ul id="chat-list" class="chat-list"></ul>
         <p id="chat-list-empty" class="empty-hint" hidden>No chats yet. Send a message to start one.</p>
       </div>
 
       <div class="sidebar-zone zone-providers">
         <button id="add-provider-btn" class="add-provider-btn" type="button">(+) Add Provider</button>
-        <ul id="provider-list" class="provider-list">
-          </ul>
+        <ul id="provider-list" class="provider-list"></ul>
         <p id="provider-list-empty" class="empty-hint" hidden>No providers configured yet.</p>
       </div>
     </aside>
 
     <main class="conversation">
-      <div id="message-stream" class="message-stream">
-        <p id="stream-empty" class="empty-hint centered">Ask a question to begin.</p>
+      <div class="chat-header">
+        <div class="chat-brand" id="chat-brand" aria-hidden="true">AIn't</div>
+        <div id="chat-model-indicator" class="chat-model-indicator">No model selected</div>
       </div>
-      
+      <div id="message-stream" class="message-stream">
+      </div>
+
       <form id="composer" class="composer" autocomplete="off">
         <textarea
           id="composer-input"
@@ -66,8 +73,9 @@
         <input id="provider-form-apikey" class="field-input" type="password" placeholder="sk-..." autocomplete="new-password" />
 
         <div class="overlay-actions">
-          <button type="button" id="provider-delete-btn" class="text-btn danger" hidden>Delete</button>
+          <button type="button" id="provider-test-btn" class="secondary-btn">Test Connection</button>
           <div class="overlay-actions-right">
+            <button type="button" id="provider-delete-btn" class="text-btn danger" hidden>Delete</button>
             <button type="button" id="provider-cancel-btn" class="text-btn">Cancel</button>
             <button type="submit" class="primary-btn">Save</button>
           </div>

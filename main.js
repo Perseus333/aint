@@ -1,9 +1,6 @@
 (function () {
   'use strict';
 
-  /* ==========================================================================
-     Constants
-     ========================================================================== */
   var STORAGE_KEYS = {
     providers: 'aichat_providers',
     chats: 'aichat_chats',
@@ -13,45 +10,46 @@
   var THINK_OPEN = '<think>';
   var THINK_CLOSE = '</think>';
 
-  /* ==========================================================================
-     State
-     ========================================================================== */
   var state = {
     providers: [],
     chats: [],
-    activeChat: null,        // chat object currently displayed; may not be in state.chats yet
-    selectedModel: null,     // { providerId, modelId } | null — decoupled from any chat
-    editingProviderId: null, // null => provider form is in "add" mode
-    editingChatId: null,     // id of chat currently being renamed inline
-    isStreaming: false
+    activeChat: null,
+    selectedModel: null,
+    editingProviderId: null,
+    editingChatId: null,
+    isStreaming: false,
+    sidebarOpen: true
   };
-
-  /* ==========================================================================
-     DOM references
-     ========================================================================== */
 
   var el = {
-    modelSelector: document.getElementById('model-select'), // Fixed
+    shell: document.querySelector('.shell'),
+    status: document.getElementById('app-status'),
+    sidebar: document.querySelector('.sidebar'),
+    sidebarToggle: document.getElementById('sidebar-toggle'),
+    modelSearch: document.getElementById('model-search'),
+    modelSelector: document.getElementById('model-select'),
+    chatBrand: document.getElementById('chat-brand'),
+    chatModelIndicator: document.getElementById('chat-model-indicator'),
     chatList: document.getElementById('chat-list'),
+    chatListEmpty: document.getElementById('chat-list-empty'),
     newChatBtn: document.getElementById('new-chat-btn'),
     providerList: document.getElementById('provider-list'),
+    providerListEmpty: document.getElementById('provider-list-empty'),
     addProviderBtn: document.getElementById('add-provider-btn'),
-    providerForm: document.getElementById('provider-overlay'), // Fixed (Targeting the overlay wrapper so hiding/showing works)
-    providerFormName: document.getElementById('provider-name'), // Fixed
-    providerFormBaseUrl: document.getElementById('provider-url'), // Fixed
-    providerFormApiKey: document.getElementById('provider-form-apikey'), // Double check if you renamed this to 'provider-key' in HTML
-    providerFormSave: document.querySelector('#provider-form button[type="submit"]'), // Fixed (Targeting the form's submit action)
-    providerFormCancel: document.getElementById('provider-cancel-btn'), // Fixed
-    providerFormDelete: document.getElementById('provider-delete-btn'), // Fixed
-    messages: document.getElementById('message-stream'), // Fixed from previous step
+    providerForm: document.getElementById('provider-overlay'),
+    providerFormName: document.getElementById('provider-name'),
+    providerFormBaseUrl: document.getElementById('provider-url'),
+    providerFormApiKey: document.getElementById('provider-form-apikey'),
+    providerFormSave: document.querySelector('#provider-form button[type="submit"]'),
+    providerFormCancel: document.getElementById('provider-cancel-btn'),
+    providerFormDelete: document.getElementById('provider-delete-btn'),
+    providerTestBtn: document.getElementById('provider-test-btn'),
+    messages: document.getElementById('message-stream'),
     composer: document.getElementById('composer'),
     composerInput: document.getElementById('composer-input'),
-    sendBtn: document.getElementById('composer-send') // Fixed
+    sendBtn: document.getElementById('composer-send')
   };
 
-  /* ==========================================================================
-     Utilities
-     ========================================================================== */
   function uid() {
     return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 9);
   }
@@ -80,8 +78,8 @@
       var raw = localStorage.getItem(key);
       if (raw === null) return fallback;
       return JSON.parse(raw);
-    } catch (e) {
-      console.error('Failed to read', key, e);
+    } catch (err) {
+      console.error('Failed to read', key, err);
       return fallback;
     }
   }
@@ -89,58 +87,135 @@
   function safeLocalStorageSet(key, value) {
     try {
       localStorage.setItem(key, JSON.stringify(value));
-    } catch (e) {
-      console.error('Failed to persist', key, e);
+    } catch (err) {
+      console.error('Failed to persist', key, err);
     }
   }
 
-  /* ==========================================================================
-     Persistence
-     ========================================================================== */
-  function syncToServer(endpoint, data) {
-    fetch(endpoint, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    }).catch(function (e) { console.warn('Server sync failed (' + endpoint + '):', e); });
-  }
-
-  async function loadState() {
-    // Server is source of truth; localStorage is the fallback when server unreachable.
-    try {
-      var results = await Promise.all([
-        fetch('/api/chats').then(function (r) { return r.json(); }),
-        fetch('/api/providers').then(function (r) { return r.json(); })
-      ]);
-      state.chats     = results[0];
-      state.providers = results[1];
-      safeLocalStorageSet(STORAGE_KEYS.chats,     state.chats);
-      safeLocalStorageSet(STORAGE_KEYS.providers, state.providers);
-    } catch (e) {
-      console.warn('Cannot reach server, falling back to localStorage:', e);
-      state.chats     = safeLocalStorageGet(STORAGE_KEYS.chats,     []);
-      state.providers = safeLocalStorageGet(STORAGE_KEYS.providers, []);
+  function setStatus(message, tone) {
+    if (!message) {
+      el.status.hidden = true;
+      el.status.textContent = '';
+      el.status.className = 'status-banner';
+      return;
     }
-    state.selectedModel = safeLocalStorageGet(STORAGE_KEYS.selectedModel, null);
+
+    el.status.textContent = message;
+    el.status.className = 'status-banner ' + (tone || 'info');
+    el.status.hidden = false;
   }
 
   function saveProviders() {
     safeLocalStorageSet(STORAGE_KEYS.providers, state.providers);
-    syncToServer('/api/providers', state.providers);
   }
 
   function saveChats() {
     safeLocalStorageSet(STORAGE_KEYS.chats, state.chats);
-    syncToServer('/api/chats', state.chats);
   }
 
-  function saveSelectedModel() { safeLocalStorageSet(STORAGE_KEYS.selectedModel, state.selectedModel); }
+  function saveSelectedModel() {
+    safeLocalStorageSet(STORAGE_KEYS.selectedModel, state.selectedModel);
+  }
 
-  /* ==========================================================================
-     Streaming <think> tag extractor
-     Buffers content so a tag split across two SSE chunks is never misread
-     as literal text, and never blocks output longer than necessary.
-     ========================================================================== */
+  function loadState() {
+    state.chats = safeLocalStorageGet(STORAGE_KEYS.chats, []);
+    state.providers = safeLocalStorageGet(STORAGE_KEYS.providers, []);
+    state.selectedModel = safeLocalStorageGet(STORAGE_KEYS.selectedModel, null);
+
+    if (!Array.isArray(state.chats)) state.chats = [];
+    if (!Array.isArray(state.providers)) state.providers = [];
+  }
+
+  function shouldUseMobileLayout() {
+    var width = window.innerWidth || document.documentElement.clientWidth || 0;
+    var height = window.innerHeight || document.documentElement.clientHeight || 0;
+    var ratio = width && height ? width / height : 0;
+    var laptopMedia = window.matchMedia && window.matchMedia('(hover: hover)').matches;
+    var coarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    var isLaptopLike = width >= 980 && height >= 620 && ratio >= 1.2 && ratio <= 2.2 && laptopMedia && !coarsePointer;
+    return !isLaptopLike;
+  }
+
+  function syncSidebarState() {
+    if (!el.shell) return;
+    var mobile = shouldUseMobileLayout();
+    el.shell.classList.toggle('sidebar-collapsed', !state.sidebarOpen);
+    el.shell.classList.toggle('mobile-layout', mobile);
+
+    if (el.sidebarToggle) {
+      el.sidebarToggle.setAttribute('aria-expanded', String(state.sidebarOpen));
+      el.sidebarToggle.setAttribute('aria-label', state.sidebarOpen ? 'Hide sidebar' : 'Show sidebar');
+      el.sidebarToggle.textContent = '☰';
+      el.sidebarToggle.hidden = !mobile ? true : state.sidebarOpen;
+    }
+  }
+
+  function toggleSidebar(forceValue) {
+    if (typeof forceValue === 'boolean') {
+      state.sidebarOpen = forceValue;
+    } else {
+      state.sidebarOpen = !state.sidebarOpen;
+    }
+    syncSidebarState();
+  }
+
+  function buildProviderHeaders(provider) {
+    var headers = {};
+    var apiKey = (provider.apiKey || '').trim();
+    if (apiKey) {
+      headers.Authorization = 'Bearer ' + apiKey;
+      headers['X-API-Key'] = apiKey;
+    }
+    return headers;
+  }
+
+  function normalizeModelsResponse(data) {
+    if (Array.isArray(data)) {
+      return data
+        .map(function (item) {
+          if (typeof item === 'string') return item;
+          return item && item.id ? item.id : null;
+        })
+        .filter(Boolean)
+        .sort();
+    }
+
+    if (!data || typeof data !== 'object') return [];
+
+    var list = Array.isArray(data.data)
+      ? data.data
+      : (Array.isArray(data.models)
+        ? data.models
+        : (Array.isArray(data.items) ? data.items : []));
+
+    return list
+      .map(function (item) {
+        if (typeof item === 'string') return item;
+        if (item && typeof item.id === 'string') return item.id;
+        if (item && typeof item.model === 'string') return item.model;
+        return null;
+      })
+      .filter(Boolean)
+      .sort();
+  }
+
+  function fetchModelsForProvider(provider) {
+    var url = stripTrailingSlash(provider.baseUrl || '') + '/models';
+    return fetch(url, {
+      headers: buildProviderHeaders(provider),
+      mode: 'cors'
+    }).then(function (res) {
+      if (!res.ok) {
+        return res.text().then(function (text) {
+          throw new Error(provider.name + ': HTTP ' + res.status + (text ? ' — ' + text.slice(0, 180) : ''));
+        });
+      }
+      return res.json();
+    }).then(function (data) {
+      return normalizeModelsResponse(data);
+    });
+  }
+
   function longestSuffixPrefixOverlap(str, tag) {
     var maxLen = Math.min(str.length, tag.length - 1);
     for (var len = maxLen; len > 0; len--) {
@@ -204,13 +279,10 @@
     return { push: push, flush: flush };
   }
 
-  /* ==========================================================================
-     Markdown / KaTeX rendering
-     ========================================================================== */
   function renderMarkdown(text) {
     try {
       return marked.parse(text || '', { breaks: true });
-    } catch (e) {
+    } catch (err) {
       return '<p>' + escapeHtml(text || '') + '</p>';
     }
   }
@@ -227,8 +299,8 @@
           ],
           throwOnError: false
         });
-      } catch (e) {
-        console.error('KaTeX render error', e);
+      } catch (err) {
+        console.error('KaTeX render error', err);
       }
     }
   }
@@ -237,59 +309,73 @@
     el.messages.scrollTop = el.messages.scrollHeight;
   }
 
-  /* ==========================================================================
-     Chat list rendering (sidebar middle zone)
-     ========================================================================== */
   function renderChatList() {
     el.chatList.innerHTML = '';
-    var sorted = state.chats.slice().sort(function (a, b) { return b.createdAt - a.createdAt; });
+    if (state.chats.length === 0) {
+      el.chatListEmpty.hidden = true;
+      return;
+    }
+
+    el.chatListEmpty.hidden = true;
+    var sorted = state.chats.slice().sort(function (a, b) {
+      return (b.createdAt || 0) - (a.createdAt || 0);
+    });
 
     for (var i = 0; i < sorted.length; i++) {
       var chat = sorted[i];
       var li = document.createElement('li');
       li.className = 'chat-item';
       li.dataset.id = chat.id;
-      if (state.activeChat && chat.id === state.activeChat.id) {
-        li.classList.add('active');
-      }
+      if (state.activeChat && chat.id === state.activeChat.id) li.classList.add('active');
 
       if (state.editingChatId === chat.id) {
         var input = document.createElement('input');
         input.type = 'text';
         input.className = 'chat-item-rename-input';
-        input.value = chat.title;
+        input.value = chat.title || 'Untitled chat';
         (function (chatId, inputEl) {
-          inputEl.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') { e.preventDefault(); commitRename(chatId, inputEl.value); }
-            if (e.key === 'Escape') { state.editingChatId = null; renderChatList(); }
+          inputEl.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              commitRename(chatId, inputEl.value);
+            }
+            if (event.key === 'Escape') {
+              state.editingChatId = null;
+              renderChatList();
+            }
           });
-          inputEl.addEventListener('blur', function () { commitRename(chatId, inputEl.value); });
+          inputEl.addEventListener('blur', function () {
+            commitRename(chatId, inputEl.value);
+          });
         })(chat.id, input);
         li.appendChild(input);
         el.chatList.appendChild(li);
-        (function (inputEl) {
-          requestAnimationFrame(function () { inputEl.focus(); inputEl.select(); });
-        })(input);
+        requestAnimationFrame(function () {
+          input.focus();
+          input.select();
+        });
         continue;
       }
 
       var titleBtn = document.createElement('button');
       titleBtn.type = 'button';
       titleBtn.className = 'chat-item-title';
-      titleBtn.textContent = chat.title;
-      titleBtn.title = chat.title;
+      titleBtn.textContent = chat.title || 'Untitled chat';
+      titleBtn.title = chat.title || 'Untitled chat';
       (function (chatId) {
-        titleBtn.addEventListener('click', function () { selectChat(chatId); });
+        titleBtn.addEventListener('click', function () {
+          selectChat(chatId);
+        });
       })(chat.id);
 
       var editBtn = document.createElement('button');
       editBtn.type = 'button';
       editBtn.className = 'chat-item-edit';
       editBtn.setAttribute('aria-label', 'Rename chat');
-      editBtn.textContent = '\u270E';
+      editBtn.textContent = '✎';
       (function (chatId) {
-        editBtn.addEventListener('click', function (e) {
-          e.stopPropagation();
+        editBtn.addEventListener('click', function (event) {
+          event.stopPropagation();
           state.editingChatId = chatId;
           renderChatList();
         });
@@ -305,7 +391,10 @@
     var trimmed = (newTitle || '').trim();
     var chat = null;
     for (var i = 0; i < state.chats.length; i++) {
-      if (state.chats[i].id === chatId) { chat = state.chats[i]; break; }
+      if (state.chats[i].id === chatId) {
+        chat = state.chats[i];
+        break;
+      }
     }
     if (chat && trimmed) {
       chat.title = trimmed;
@@ -328,9 +417,13 @@
   }
 
   function persistActiveChatIfNeeded() {
+    if (!state.activeChat) return;
     var exists = false;
     for (var i = 0; i < state.chats.length; i++) {
-      if (state.chats[i].id === state.activeChat.id) { exists = true; break; }
+      if (state.chats[i].id === state.activeChat.id) {
+        exists = true;
+        break;
+      }
     }
     if (!exists) {
       state.chats.push(state.activeChat);
@@ -343,7 +436,10 @@
     if (state.isStreaming) return;
     var chat = null;
     for (var i = 0; i < state.chats.length; i++) {
-      if (state.chats[i].id === id) { chat = state.chats[i]; break; }
+      if (state.chats[i].id === id) {
+        chat = state.chats[i];
+        break;
+      }
     }
     if (!chat) return;
     state.activeChat = chat;
@@ -351,9 +447,6 @@
     renderMessages();
   }
 
-  /* ==========================================================================
-     Message rendering (chat pane)
-     ========================================================================== */
   function buildMessageElement(msg) {
     var wrapper = document.createElement('div');
     wrapper.className = 'message message-' + msg.role;
@@ -362,6 +455,7 @@
     if (msg.role === 'assistant' && msg.thinking) {
       var details = document.createElement('details');
       details.className = 'think-block';
+      details.open = true;
       var summary = document.createElement('summary');
       summary.textContent = 'Thought process';
       var thinkBody = document.createElement('div');
@@ -376,8 +470,33 @@
     body.className = 'message-body';
     body.innerHTML = renderMarkdown(msg.content || '');
     wrapper.appendChild(body);
-
     return wrapper;
+  }
+
+  function renderModelIndicator() {
+    if (!el.chatModelIndicator) return;
+    if (!state.selectedModel) {
+      el.chatModelIndicator.textContent = 'No model selected';
+      return;
+    }
+
+    var provider = null;
+    for (var i = 0; i < state.providers.length; i++) {
+      if (state.providers[i].id === state.selectedModel.providerId) {
+        provider = state.providers[i];
+        break;
+      }
+    }
+
+    var providerName = provider ? provider.name : 'Provider';
+    el.chatModelIndicator.textContent = providerName + ' · ' + state.selectedModel.modelId;
+  }
+
+  function syncEmptyChatState() {
+    var hasMessages = Boolean(state.activeChat && state.activeChat.messages && state.activeChat.messages.length > 0);
+    if (el.chatBrand) {
+      el.chatBrand.hidden = hasMessages;
+    }
   }
 
   function renderMessages() {
@@ -389,39 +508,38 @@
     }
     el.messages.appendChild(frag);
     renderMathInScope(el.messages);
+    syncEmptyChatState();
     scrollMessagesToBottom();
   }
 
-  /* ==========================================================================
-     Provider management (sidebar bottom zone)
-     ========================================================================== */
   function renderProviderList() {
     el.providerList.innerHTML = '';
     if (state.providers.length === 0) {
-      var empty = document.createElement('li');
-      empty.className = 'provider-empty';
-      empty.textContent = 'No providers yet';
-      el.providerList.appendChild(empty);
+      el.providerListEmpty.hidden = true;
       return;
     }
+
+    el.providerListEmpty.hidden = true;
     for (var i = 0; i < state.providers.length; i++) {
-      var p = state.providers[i];
+      var provider = state.providers[i];
       var li = document.createElement('li');
       li.className = 'provider-item';
-      li.dataset.id = p.id;
+      li.dataset.id = provider.id;
 
       var name = document.createElement('span');
       name.className = 'provider-name';
-      name.textContent = p.name;
-      name.title = p.baseUrl;
+      name.textContent = provider.name;
+      name.title = provider.baseUrl;
 
       var editBtn = document.createElement('button');
       editBtn.type = 'button';
       editBtn.className = 'provider-edit-btn';
       editBtn.textContent = 'Edit';
       (function (providerId) {
-        editBtn.addEventListener('click', function () { openProviderForm(providerId); });
-      })(p.id);
+        editBtn.addEventListener('click', function () {
+          openProviderForm(providerId);
+        });
+      })(provider.id);
 
       li.appendChild(name);
       li.appendChild(editBtn);
@@ -434,7 +552,10 @@
     if (providerId) {
       var provider = null;
       for (var i = 0; i < state.providers.length; i++) {
-        if (state.providers[i].id === providerId) { provider = state.providers[i]; break; }
+        if (state.providers[i].id === providerId) {
+          provider = state.providers[i];
+          break;
+        }
       }
       if (!provider) return;
       el.providerFormName.value = provider.name;
@@ -456,12 +577,46 @@
     state.editingProviderId = null;
   }
 
-  function saveProviderForm() {
+  function getProviderFromForm() {
     var name = el.providerFormName.value.trim();
     var baseUrl = stripTrailingSlash(el.providerFormBaseUrl.value);
     var apiKey = el.providerFormApiKey.value.trim();
+    return {
+      id: state.editingProviderId || uid(),
+      name: name,
+      baseUrl: baseUrl,
+      apiKey: apiKey
+    };
+  }
 
-    if (!name || !baseUrl) {
+  function runProviderConnectionTest() {
+    var provider = getProviderFromForm();
+    if (!provider.name || !provider.baseUrl) {
+      setStatus('Display name and base URL are required before testing a provider.', 'error');
+      return;
+    }
+
+    var originalText = el.providerTestBtn.textContent;
+    el.providerTestBtn.disabled = true;
+    el.providerTestBtn.textContent = 'Testing...';
+
+    fetchModelsForProvider(provider).then(function (models) {
+      var summary = models.length > 0
+        ? provider.name + ' reachable — ' + models.length + ' models loaded.'
+        : provider.name + ' reachable, but no models were returned.';
+      setStatus(summary, 'success');
+    }).catch(function (err) {
+      var message = err && err.message ? err.message : 'Unknown error';
+      setStatus(provider.name + ' connection failed: ' + message + '. Check the base URL and whether the provider allows browser CORS requests.', 'error');
+    }).then(function () {
+      el.providerTestBtn.disabled = false;
+      el.providerTestBtn.textContent = originalText;
+    });
+  }
+
+  function saveProviderForm() {
+    var provider = getProviderFromForm();
+    if (!provider.name || !provider.baseUrl) {
       alert('Display name and base URL are required.');
       return;
     }
@@ -469,50 +624,33 @@
     if (state.editingProviderId) {
       for (var i = 0; i < state.providers.length; i++) {
         if (state.providers[i].id === state.editingProviderId) {
-          state.providers[i].name = name;
-          state.providers[i].baseUrl = baseUrl;
-          state.providers[i].apiKey = apiKey;
+          state.providers[i] = provider;
           break;
         }
       }
     } else {
-      state.providers.push({ id: uid(), name: name, baseUrl: baseUrl, apiKey: apiKey });
+      state.providers.push(provider);
     }
 
     saveProviders();
     renderProviderList();
     closeProviderForm();
     populateModelSelector();
+    setStatus('Provider saved locally.', 'success');
   }
 
   function deleteProviderForm() {
     if (!state.editingProviderId) return;
     if (!confirm('Remove this provider? This cannot be undone.')) return;
     var idToRemove = state.editingProviderId;
-    state.providers = state.providers.filter(function (p) { return p.id !== idToRemove; });
+    state.providers = state.providers.filter(function (provider) {
+      return provider.id !== idToRemove;
+    });
     saveProviders();
     renderProviderList();
     closeProviderForm();
     populateModelSelector();
-  }
-
-  /* ==========================================================================
-     Model discovery + global selector
-     ========================================================================== */
-  function fetchModelsForProvider(provider) {
-    var headers = {};
-    if (provider.apiKey) headers.Authorization = 'Bearer ' + provider.apiKey;
-
-    return fetch(provider.baseUrl + '/models', { headers: headers }).then(function (res) {
-      if (!res.ok) throw new Error(provider.name + ': HTTP ' + res.status);
-      return res.json();
-    }).then(function (data) {
-      var list = Array.isArray(data.data) ? data.data : (Array.isArray(data.models) ? data.models : []);
-      return list
-        .map(function (m) { return typeof m === 'string' ? m : (m && m.id); })
-        .filter(Boolean)
-        .sort();
-    });
+    setStatus('Provider removed.', 'success');
   }
 
   function currentSelectedValue() {
@@ -531,6 +669,27 @@
       };
     }
     saveSelectedModel();
+    renderModelIndicator();
+  }
+
+  function filterModelOptions() {
+    if (!el.modelSelector) return;
+    var query = (el.modelSearch && el.modelSearch.value ? el.modelSearch.value : '').trim().toLowerCase();
+    var options = Array.prototype.slice.call(el.modelSelector.options);
+    var hasVisible = false;
+    for (var i = 0; i < options.length; i++) {
+      var option = options[i];
+      if (option.disabled) {
+        option.hidden = false;
+        continue;
+      }
+      var matches = !query || option.textContent.toLowerCase().indexOf(query) !== -1;
+      option.hidden = !matches;
+      if (matches) hasVisible = true;
+    }
+    if (!hasVisible && el.modelSelector.options.length > 0) {
+      el.modelSelector.value = '';
+    }
   }
 
   function populateModelSelector() {
@@ -545,11 +704,12 @@
       el.modelSelector.appendChild(opt);
       state.selectedModel = null;
       saveSelectedModel();
+      renderModelIndicator();
       return Promise.resolve();
     }
 
     var loading = document.createElement('option');
-    loading.textContent = 'Loading models\u2026';
+    loading.textContent = 'Loading models…';
     loading.disabled = true;
     loading.selected = true;
     el.modelSelector.appendChild(loading);
@@ -568,14 +728,13 @@
         var provider = results[i].provider;
         var models = results[i].models;
         var error = results[i].error;
-
         var group = document.createElement('optgroup');
         group.label = error ? (provider.name + ' (unavailable)') : provider.name;
 
         if (error) {
           var errOpt = document.createElement('option');
           errOpt.disabled = true;
-          errOpt.textContent = 'Could not load models';
+          errOpt.textContent = 'Connection failed';
           group.appendChild(errOpt);
         } else if (models.length === 0) {
           var emptyOpt = document.createElement('option');
@@ -602,17 +761,18 @@
       if (!matchedPrevious) {
         var options = el.modelSelector.options;
         for (var k = 0; k < options.length; k++) {
-          if (!options[k].disabled) { options[k].selected = true; break; }
+          if (!options[k].disabled) {
+            options[k].selected = true;
+            break;
+          }
         }
       }
 
+      filterModelOptions();
       updateSelectedModelFromDropdown();
     });
   }
 
-  /* ==========================================================================
-     Sending messages + SSE streaming engine
-     ========================================================================== */
   function setStreaming(value) {
     state.isStreaming = value;
     el.sendBtn.disabled = value;
@@ -624,15 +784,19 @@
     el.composerInput.style.height = Math.min(el.composerInput.scrollHeight, 200) + 'px';
   }
 
-  function handleComposerSubmit(e) {
-    e.preventDefault();
+  function handleComposerSubmit(event) {
+    event.preventDefault();
     if (state.isStreaming) return;
+
+    if (!state.activeChat) {
+      createNewChat();
+    }
 
     var text = el.composerInput.value.trim();
     if (!text) return;
 
     if (!state.selectedModel) {
-      alert('Choose a model from the sidebar first (add a provider if the list is empty).');
+      setStatus('Choose a model from the sidebar first, or add a provider to get started.', 'error');
       return;
     }
 
@@ -652,14 +816,19 @@
 
   function sendToModel() {
     var chat = state.activeChat;
+    if (!chat) return Promise.resolve();
+
     var providerId = state.selectedModel.providerId;
     var modelId = state.selectedModel.modelId;
     var provider = null;
     for (var i = 0; i < state.providers.length; i++) {
-      if (state.providers[i].id === providerId) { provider = state.providers[i]; break; }
+      if (state.providers[i].id === providerId) {
+        provider = state.providers[i];
+        break;
+      }
     }
     if (!provider) {
-      alert('The provider for the selected model is no longer configured.');
+      setStatus('The selected provider is no longer configured.', 'error');
       return Promise.resolve();
     }
 
@@ -674,7 +843,7 @@
     thinkDetails.className = 'think-block';
     thinkDetails.hidden = true;
     var summary = document.createElement('summary');
-    summary.textContent = 'Thinking\u2026';
+    summary.textContent = 'Thinking…';
     var thinkBody = document.createElement('div');
     thinkBody.className = 'think-body';
     thinkDetails.appendChild(summary);
@@ -682,7 +851,6 @@
 
     var bodyEl = document.createElement('div');
     bodyEl.className = 'message-body streaming';
-
     wrapper.appendChild(thinkDetails);
     wrapper.appendChild(bodyEl);
     el.messages.appendChild(wrapper);
@@ -704,21 +872,28 @@
 
     setStreaming(true);
 
-    var outgoingMessages = chat.messages
-      .filter(function (m) { return m.id !== assistantMsg.id; })
-      .map(function (m) { return { role: m.role, content: m.content }; });
+    var outgoingMessages = chat.messages.filter(function (msg) {
+      return msg.id !== assistantMsg.id;
+    }).map(function (msg) {
+      return { role: msg.role, content: msg.content };
+    });
 
     var headers = { 'Content-Type': 'application/json' };
-    if (provider.apiKey) headers.Authorization = 'Bearer ' + provider.apiKey;
+    var apiKey = (provider.apiKey || '').trim();
+    if (apiKey) {
+      headers.Authorization = 'Bearer ' + apiKey;
+      headers['X-API-Key'] = apiKey;
+    }
 
     return fetch(provider.baseUrl + '/chat/completions', {
       method: 'POST',
       headers: headers,
-      body: JSON.stringify({ model: modelId, messages: outgoingMessages, stream: true })
+      body: JSON.stringify({ model: modelId, messages: outgoingMessages, stream: true }),
+      mode: 'cors'
     }).then(function (res) {
       if (!res.ok || !res.body) {
         return res.text().catch(function () { return ''; }).then(function (errText) {
-          throw new Error('HTTP ' + res.status + ' ' + errText);
+          throw new Error('HTTP ' + res.status + (errText ? ' ' + errText.slice(0, 180) : ''));
         });
       }
 
@@ -742,7 +917,7 @@
             var json;
             try {
               json = JSON.parse(payload);
-            } catch (e) {
+            } catch (err) {
               continue;
             }
 
@@ -750,7 +925,6 @@
             var delta = choice && (choice.delta ? choice.delta.content : choice.text);
             if (delta) processor.push(delta);
           }
-
           return pump();
         });
       }
@@ -761,8 +935,9 @@
     }).catch(function (err) {
       processor.flush();
       var prefix = assistantMsg.content ? '\n\n' : '';
-      assistantMsg.content += prefix + '\u26A0\uFE0F Error: ' + err.message;
+      assistantMsg.content += prefix + '⚠️ Error: ' + (err && err.message ? err.message : 'Unknown error');
       bodyEl.textContent = assistantMsg.content;
+      setStatus('Streaming failed: ' + (err && err.message ? err.message : 'Unknown error'), 'error');
     }).then(function () {
       bodyEl.classList.remove('streaming');
       bodyEl.innerHTML = renderMarkdown(assistantMsg.content);
@@ -773,37 +948,61 @@
     });
   }
 
-  /* ==========================================================================
-     Init
-     ========================================================================== */
   function bindEvents() {
     el.modelSelector.addEventListener('change', updateSelectedModelFromDropdown);
+    if (el.modelSearch) {
+      el.modelSearch.addEventListener('input', filterModelOptions);
+    }
     el.newChatBtn.addEventListener('click', createNewChat);
-
-    el.addProviderBtn.addEventListener('click', function () { openProviderForm(null); });
+    if (el.sidebarToggle) {
+      el.sidebarToggle.addEventListener('click', function () {
+        toggleSidebar();
+      });
+    }
+    el.addProviderBtn.addEventListener('click', function () {
+      openProviderForm(null);
+    });
     el.providerFormSave.addEventListener('click', saveProviderForm);
     el.providerFormCancel.addEventListener('click', closeProviderForm);
     el.providerFormDelete.addEventListener('click', deleteProviderForm);
+    el.providerTestBtn.addEventListener('click', runProviderConnectionTest);
 
     el.composer.addEventListener('submit', handleComposerSubmit);
     el.composerInput.addEventListener('input', autoGrowTextarea);
-    el.composerInput.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
+    el.composerInput.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
         el.composer.requestSubmit();
       }
     });
   }
 
-  async function init() {
-    await loadState();
+  function init() {
+    loadState();
+    state.sidebarOpen = !shouldUseMobileLayout();
+    syncSidebarState();
     renderProviderList();
     renderChatList();
-    createNewChat(); // always boot into a brand-new, blank session
+    if (!state.activeChat && state.chats.length > 0) {
+      state.activeChat = state.chats[state.chats.length - 1];
+    }
+    if (!state.activeChat) {
+      createNewChat();
+    } else {
+      renderMessages();
+    }
     bindEvents();
+    renderModelIndicator();
+    window.addEventListener('resize', function () {
+      if (shouldUseMobileLayout()) {
+        state.sidebarOpen = false;
+      } else {
+        state.sidebarOpen = true;
+      }
+      syncSidebarState();
+    });
     populateModelSelector();
   }
 
   document.addEventListener('DOMContentLoaded', init);
 })();
-
