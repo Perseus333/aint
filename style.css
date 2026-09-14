@@ -183,8 +183,8 @@ input, textarea, select {
 .sidebar-toggle {
   position: absolute;
   top: 12px;
-  right: 12px;
-  left: auto;
+  left: 12px;
+  right: auto;
   z-index: 35;
   background: rgba(21, 28, 31, 0.92);
   box-shadow: 0 10px 24px rgba(5, 9, 10, 0.35);
@@ -656,8 +656,8 @@ input, textarea, select {
   }
 
   .mobile-layout .sidebar-toggle {
-    right: 12px;
-    left: auto;
+    left: 12px;
+    right: auto;
     top: 12px;
   }
 

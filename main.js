@@ -147,6 +147,13 @@
       el.sidebarToggle.setAttribute('aria-label', state.sidebarOpen ? 'Hide sidebar' : 'Show sidebar');
       el.sidebarToggle.textContent = '☰';
       el.sidebarToggle.hidden = !mobile ? true : state.sidebarOpen;
+      if (mobile) {
+        el.sidebarToggle.style.left = '12px';
+        el.sidebarToggle.style.right = 'auto';
+      } else {
+        el.sidebarToggle.style.left = 'auto';
+        el.sidebarToggle.style.right = 'auto';
+      }
     }
   }
 
