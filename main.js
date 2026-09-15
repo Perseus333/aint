@@ -25,10 +25,10 @@
     shell: document.querySelector('.shell'),
     status: document.getElementById('app-status'),
     sidebar: document.querySelector('.sidebar'),
-    modelSearch: document.getElementById('model-search'),
     modelSelector: document.getElementById('model-select'),
     chatBrand: document.getElementById('chat-brand'),
     chatModelIndicator: document.getElementById('chat-model-indicator'),
+    webSearchBtn: document.getElementById('web-search-btn'),
     chatList: document.getElementById('chat-list'),
     chatListEmpty: document.getElementById('chat-list-empty'),
     newChatBtn: document.getElementById('new-chat-btn'),
@@ -809,9 +809,48 @@
   function sendToModel() {
     var chat = state.activeChat;
     if (!chat) return Promise.resolve();
+    return sendMessagesToProviderChat(chat, null, null);
+  }
+
+  function runWebSearch() {
+    var q = prompt('Web search query:');
+    if (!q) return;
+
+    if (!state.selectedModel) {
+      setStatus('Choose a model from the sidebar first, or add a provider to get started.', 'error');
+      return;
+    }
 
     var providerId = state.selectedModel.providerId;
     var modelId = state.selectedModel.modelId;
+    var provider = null;
+    for (var i = 0; i < state.providers.length; i++) {
+      if (state.providers[i].id === providerId) {
+        provider = state.providers[i];
+        break;
+      }
+    }
+    if (!provider) {
+      setStatus('The selected provider is no longer configured.', 'error');
+      return;
+    }
+
+    // Only use server tools for OpenRouter providers
+    if (!provider.baseUrl || provider.baseUrl.indexOf('openrouter.ai') === -1) {
+      setStatus('Web search tool is only available for OpenRouter providers.', 'error');
+      return;
+    }
+
+    // create a temporary chat if needed
+    if (!state.activeChat) createNewChat();
+
+    // send the user's query as a message using the web_search server tool
+    return sendMessagesToProviderChat(state.activeChat, { role: 'user', content: q }, [ { type: 'openrouter:web_search', parameters: { max_results: 5 } } ]);
+  }
+
+  function sendMessagesToProviderChat(chat, overrideUserMessage, toolsArray) {
+    var providerId = state.selectedModel && state.selectedModel.providerId;
+    var modelId = state.selectedModel && state.selectedModel.modelId;
     var provider = null;
     for (var i = 0; i < state.providers.length; i++) {
       if (state.providers[i].id === providerId) {
@@ -864,11 +903,14 @@
 
     setStreaming(true);
 
-    var outgoingMessages = chat.messages.filter(function (msg) {
-      return msg.id !== assistantMsg.id;
-    }).map(function (msg) {
-      return { role: msg.role, content: msg.content };
-    });
+    var outgoing = [];
+    if (overrideUserMessage) {
+      outgoing = chat.messages.filter(function (msg) { return msg.id !== assistantMsg.id; }).map(function (msg) { return { role: msg.role, content: msg.content }; });
+      // replace the last user message with the override (useful for single-query tool calls)
+      outgoing.push({ role: overrideUserMessage.role, content: overrideUserMessage.content });
+    } else {
+      outgoing = chat.messages.filter(function (msg) { return msg.id !== assistantMsg.id; }).map(function (msg) { return { role: msg.role, content: msg.content }; });
+    }
 
     var headers = { 'Content-Type': 'application/json' };
     var apiKey = (provider.apiKey || '').trim();
@@ -877,10 +919,13 @@
       headers['X-API-Key'] = apiKey;
     }
 
+    var body = { model: modelId, messages: outgoing, stream: true };
+    if (Array.isArray(toolsArray) && toolsArray.length) body.tools = toolsArray;
+
     return fetch(provider.baseUrl + '/chat/completions', {
       method: 'POST',
       headers: headers,
-      body: JSON.stringify({ model: modelId, messages: outgoingMessages, stream: true }),
+      body: JSON.stringify(body),
       mode: 'cors'
     }).then(function (res) {
       if (!res.ok || !res.body) {
@@ -942,9 +987,6 @@
 
   function bindEvents() {
     el.modelSelector.addEventListener('change', updateSelectedModelFromDropdown);
-    if (el.modelSearch) {
-      el.modelSearch.addEventListener('input', filterModelOptions);
-    }
     el.newChatBtn.addEventListener('click', createNewChat);
 
     // provider form handlers
@@ -966,8 +1008,15 @@
       }
     });
 
+    // web search button
+    if (el.webSearchBtn) {
+      el.webSearchBtn.addEventListener('click', function () {
+        runWebSearch();
+      });
+    }
+
     // Touch gesture handling for mobile sidebar swipe
-    var touch = { startX: 0, startY: 0, lastX: 0, active: false };
+    var touch = { startX: 0, startY: 0, lastX: 0, active: false, moved: false };
     function onTouchStart(e) {
       if (!shouldUseMobileLayout()) return;
       var t = e.touches && e.touches[0];
@@ -975,19 +1024,26 @@
       touch.startX = t.clientX;
       touch.startY = t.clientY;
       touch.lastX = touch.startX;
+      touch.moved = false;
       touch.active = true;
     }
     function onTouchMove(e) {
       if (!touch.active) return;
       var t = e.touches && e.touches[0];
       if (!t) return;
+      var dx = Math.abs(t.clientX - touch.startX);
+      var dy = Math.abs(t.clientY - touch.startY);
+      // if the gesture looks vertical, bail (let scrolling continue)
+      if (dy > dx && dy > 10) {
+        touch.active = false;
+        return;
+      }
       touch.lastX = t.clientX;
+      touch.moved = true;
     }
     function onTouchEnd(e) {
-      if (!touch.active) return;
+      if (!touch.active || !touch.moved) return;
       var dx = touch.lastX - touch.startX;
-      var absDx = Math.abs(dx);
-      var dy = Math.abs((e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientY : 0) - touch.startY);
       touch.active = false;
       var threshold = 80; // minimum swipe distance
       var edgeThreshold = 60; // allow opening only if swipe starts near left edge
