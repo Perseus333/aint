@@ -18,7 +18,8 @@
     editingProviderId: null,
     editingChatId: null,
     isStreaming: false,
-    sidebarOpen: true
+    sidebarOpen: true,
+    webSearchEnabled: false
   };
 
   var el = {
@@ -28,7 +29,8 @@
     modelSelector: document.getElementById('model-select'),
     chatBrand: document.getElementById('chat-brand'),
     chatModelIndicator: document.getElementById('chat-model-indicator'),
-    webSearchBtn: document.getElementById('web-search-btn'),
+    webSearchToggle: document.getElementById('web-search-toggle'),
+    webSearchToggleInline: document.getElementById('web-search-toggle-inline'),
     chatList: document.getElementById('chat-list'),
     chatListEmpty: document.getElementById('chat-list-empty'),
     newChatBtn: document.getElementById('new-chat-btn'),
@@ -803,7 +805,20 @@
     scrollMessagesToBottom();
     saveChats();
 
-    sendToModel();
+    // build tools array automatically when web-search toggle is enabled and provider supports OpenRouter tools
+    var toolsForThisCall = null;
+    if (state.webSearchEnabled && state.selectedModel) {
+      var providerId = state.selectedModel.providerId;
+      var provider = state.providers.find(function (p) { return p.id === providerId; });
+      if (provider && provider.baseUrl && provider.baseUrl.indexOf('openrouter.ai') !== -1) {
+        toolsForThisCall = [
+          { type: 'openrouter:web_search', parameters: { max_results: 6, engine: 'parallel' } },
+          { type: 'openrouter:web_fetch', parameters: { max_bytes: 200000 } }
+        ];
+      }
+    }
+
+    return sendMessagesToProviderChat(state.activeChat, null, toolsForThisCall);
   }
 
   function sendToModel() {
@@ -845,7 +860,7 @@
     if (!state.activeChat) createNewChat();
 
     // send the user's query as a message using the web_search server tool
-    return sendMessagesToProviderChat(state.activeChat, { role: 'user', content: q }, [ { type: 'openrouter:web_search', parameters: { max_results: 5 } } ]);
+    return sendMessagesToProviderChat(state.activeChat, { role: 'user', content: q }, [ { type: 'openrouter:web_search', parameters: { max_results: 5, engine: 'parallel' } } ]);
   }
 
   function sendMessagesToProviderChat(chat, overrideUserMessage, toolsArray) {
@@ -1008,10 +1023,37 @@
       }
     });
 
-    // web search button
-    if (el.webSearchBtn) {
-      el.webSearchBtn.addEventListener('click', function () {
-        runWebSearch();
+    // web search toggles (stacked and inline) - sync their state
+    function setWebSearchEnabled(enabled) {
+      state.webSearchEnabled = !!enabled;
+      if (el.webSearchToggle) {
+        el.webSearchToggle.setAttribute('aria-pressed', state.webSearchEnabled ? 'true' : 'false');
+        el.webSearchToggle.classList.toggle('active', state.webSearchEnabled);
+      }
+      if (el.webSearchToggleInline) {
+        el.webSearchToggleInline.setAttribute('aria-pressed', state.webSearchEnabled ? 'true' : 'false');
+        el.webSearchToggleInline.classList.toggle('active', state.webSearchEnabled);
+      }
+    }
+
+    if (el.webSearchToggle) {
+      el.webSearchToggle.addEventListener('click', function () {
+        setWebSearchEnabled(!state.webSearchEnabled);
+        setStatus('Web search ' + (state.webSearchEnabled ? 'enabled' : 'disabled'), 'info');
+      });
+    }
+
+    if (el.webSearchToggleInline) {
+      el.webSearchToggleInline.addEventListener('click', function () {
+        setWebSearchEnabled(!state.webSearchEnabled);
+      });
+    }
+
+    // send button (moved out of composer) should submit the composer form
+    if (el.sendBtn) {
+      el.sendBtn.addEventListener('click', function () {
+        // trigger the form submit in a safe way
+        if (!state.isStreaming) el.composer.requestSubmit();
       });
     }
 

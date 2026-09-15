@@ -504,9 +504,32 @@ input, textarea, select {
 /* add safe-area padding so composer isn't obscured on devices with gesture bars */
 #composer { padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
 
+/* inline web toggle inside composer */
+.web-toggle-inline {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+}
+
+.web-toggle-inline.active {
+  background: var(--accent-soft);
+  color: var(--web-accent);
+  border-color: rgba(90,160,214,0.12);
+}
+
 #composer-input {
   width: 100%;
-  padding: 12px 88px 12px 14px;
+  padding: 12px 14px 12px 48px; /* leave space for inline toggle */
   min-height: 52px;
   max-height: 200px;
   resize: none;
@@ -514,8 +537,57 @@ input, textarea, select {
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 12px;
-  /* avoid being hidden behind on-screen keyboard: allow viewport to grow */
   box-sizing: border-box;
+}
+
+/* vertical action stack (send + web-search) */
+.action-stack {
+  position: fixed;
+  right: 18px;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 30; /* behind the sidebar overlay (sidebar uses 70 on mobile)
+                 and above conversation content */
+}
+
+.action-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  color: var(--bg-1);
+  box-shadow: 0 8px 20px rgba(5,9,10,0.28);
+}
+
+.action-btn.send {
+  background: var(--accent);
+  color: var(--bg-1);
+}
+
+.action-btn.send:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+.action-btn.web-search {
+  background: rgba(255,255,255,0.02);
+  color: var(--text);
+}
+
+.action-btn.web-search.active {
+  background: var(--web-accent-bg);
+  color: var(--bg-1);
+  border-color: rgba(90,160,214,0.18);
+}
+
+:root {
+  --web-accent: #5aa0d6;
+  --web-accent-bg: rgba(90,160,214,0.14);
 }
 
 #composer-send,
@@ -526,27 +598,9 @@ input, textarea, select {
   transition: transform 0.18s ease, opacity 0.18s ease, background 0.18s ease;
 }
 
-#composer-send {
-  position: absolute;
-  right: 24px;
-  bottom: 22px;
-  height: 42px;
-  min-width: 72px;
-  background: var(--accent);
-  color: var(--bg-1);
-  padding: 0 18px;
-  font-weight: 700;
-  border-radius: 12px;
-}
+/* keep old absolute send fallback hidden (we now use action-stack send) */
+#composer-send[disabled] { opacity: 0.6; }
 
-#composer-send:hover:not(:disabled) {
-  background: var(--accent-strong);
-}
-
-#composer-send:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
 
 .overlay {
   position: fixed;
