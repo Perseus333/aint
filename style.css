@@ -387,10 +387,13 @@ input, textarea, select {
 
 .message.message-user {
   margin-left: auto;
+  margin-right: 6px;
+  max-width: 60%;
 }
 
 .message.message-assistant {
-  margin-right: auto;
+  max-width: 100%;
+  margin: 0 0 18px 0;
 }
 
 .message-body {
@@ -405,6 +408,15 @@ input, textarea, select {
 .message.message-user .message-body {
   background: rgba(167, 192, 128, 0.08);
   border-color: rgba(167, 192, 128, 0.22);
+}
+
+/* assistant messages: remove visual box and occupy full width */
+.message.message-assistant .message-body {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 10px 0;
+  max-width: 100%;
 }
 
 .message-body.streaming::after {
@@ -504,33 +516,17 @@ input, textarea, select {
 /* add safe-area padding so composer isn't obscured on devices with gesture bars */
 #composer { padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
 
-/* inline web toggle inside composer */
-.web-toggle-inline {
-  position: absolute;
-  left: 18px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid var(--border);
-  display: inline-flex;
+#composer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
   align-items: center;
-  justify-content: center;
-  color: var(--text);
-}
-
-.web-toggle-inline.active {
-  background: var(--accent-soft);
-  color: var(--web-accent);
-  border-color: rgba(90,160,214,0.12);
 }
 
 #composer-input {
   width: 100%;
-  padding: 12px 14px 12px 48px; /* leave space for inline toggle */
-  min-height: 52px;
+  padding: 12px 14px;
+  min-height: 56px; /* match stacked buttons combined height */
   max-height: 200px;
   resize: none;
   background: rgba(37, 45, 49, 0.9);
@@ -539,6 +535,44 @@ input, textarea, select {
   border-radius: 12px;
   box-sizing: border-box;
 }
+
+.action-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-btn {
+  width: 24px; /* 50% smaller than before (48->24) */
+  height: 24px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  color: var(--text);
+  box-shadow: 0 8px 20px rgba(5,9,10,0.16);
+}
+
+.action-btn.send {
+  background: var(--accent);
+  color: var(--bg-1);
+}
+
+.action-btn.web-search.active {
+  background: var(--web-accent-bg);
+  color: var(--bg-1);
+  border-color: rgba(90,160,214,0.18);
+}
+
+:root {
+  --web-accent: #5aa0d6;
+  --web-accent-bg: rgba(90,160,214,0.14);
+}
+
 
 /* vertical action stack (send + web-search) */
 .action-stack {
