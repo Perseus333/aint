@@ -25,7 +25,6 @@
     shell: document.querySelector('.shell'),
     status: document.getElementById('app-status'),
     sidebar: document.querySelector('.sidebar'),
-    sidebarToggle: document.getElementById('sidebar-toggle'),
     modelSearch: document.getElementById('model-search'),
     modelSelector: document.getElementById('model-select'),
     chatBrand: document.getElementById('chat-brand'),
@@ -141,20 +140,6 @@
     var mobile = shouldUseMobileLayout();
     el.shell.classList.toggle('sidebar-collapsed', !state.sidebarOpen);
     el.shell.classList.toggle('mobile-layout', mobile);
-
-    if (el.sidebarToggle) {
-      el.sidebarToggle.setAttribute('aria-expanded', String(state.sidebarOpen));
-      el.sidebarToggle.setAttribute('aria-label', state.sidebarOpen ? 'Hide sidebar' : 'Show sidebar');
-      el.sidebarToggle.textContent = '☰';
-      el.sidebarToggle.hidden = !mobile ? true : state.sidebarOpen;
-      if (mobile) {
-        el.sidebarToggle.style.left = '12px';
-        el.sidebarToggle.style.right = 'auto';
-      } else {
-        el.sidebarToggle.style.left = 'auto';
-        el.sidebarToggle.style.right = 'auto';
-      }
-    }
   }
 
   function toggleSidebar(forceValue) {
@@ -961,11 +946,8 @@
       el.modelSearch.addEventListener('input', filterModelOptions);
     }
     el.newChatBtn.addEventListener('click', createNewChat);
-    if (el.sidebarToggle) {
-      el.sidebarToggle.addEventListener('click', function () {
-        toggleSidebar();
-      });
-    }
+
+    // provider form handlers
     el.addProviderBtn.addEventListener('click', function () {
       openProviderForm(null);
     });
@@ -974,6 +956,7 @@
     el.providerFormDelete.addEventListener('click', deleteProviderForm);
     el.providerTestBtn.addEventListener('click', runProviderConnectionTest);
 
+    // composer
     el.composer.addEventListener('submit', handleComposerSubmit);
     el.composerInput.addEventListener('input', autoGrowTextarea);
     el.composerInput.addEventListener('keydown', function (event) {
@@ -982,6 +965,51 @@
         el.composer.requestSubmit();
       }
     });
+
+    // Touch gesture handling for mobile sidebar swipe
+    var touch = { startX: 0, startY: 0, lastX: 0, active: false };
+    function onTouchStart(e) {
+      if (!shouldUseMobileLayout()) return;
+      var t = e.touches && e.touches[0];
+      if (!t) return;
+      touch.startX = t.clientX;
+      touch.startY = t.clientY;
+      touch.lastX = touch.startX;
+      touch.active = true;
+    }
+    function onTouchMove(e) {
+      if (!touch.active) return;
+      var t = e.touches && e.touches[0];
+      if (!t) return;
+      touch.lastX = t.clientX;
+    }
+    function onTouchEnd(e) {
+      if (!touch.active) return;
+      var dx = touch.lastX - touch.startX;
+      var absDx = Math.abs(dx);
+      var dy = Math.abs((e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientY : 0) - touch.startY);
+      touch.active = false;
+      var threshold = 80; // minimum swipe distance
+      var edgeThreshold = 60; // allow opening only if swipe starts near left edge
+
+      // open on left-to-right swipe starting near left edge
+      if (dx > threshold && touch.startX <= edgeThreshold) {
+        state.sidebarOpen = true;
+        syncSidebarState();
+        return;
+      }
+
+      // close on right-to-left swipe when sidebar is open
+      if (dx < -threshold && state.sidebarOpen) {
+        state.sidebarOpen = false;
+        syncSidebarState();
+        return;
+      }
+    }
+
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchmove', onTouchMove, { passive: true });
+    document.addEventListener('touchend', onTouchEnd, { passive: true });
   }
 
   function init() {
