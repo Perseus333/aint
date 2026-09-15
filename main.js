@@ -1042,48 +1042,13 @@
   document.addEventListener('DOMContentLoaded', init);
 
   // Register service worker for PWA behavior when available and on secure origins
-  var deferredInstallPrompt = null;
-  var installBtn = null;
-
-  if (typeof window !== 'undefined') {
-    window.addEventListener('beforeinstallprompt', function (e) {
-      // Prevent the mini-infobar from appearing on mobile
-      e.preventDefault();
-      deferredInstallPrompt = e;
-      installBtn = document.getElementById('install-btn');
-      if (installBtn) {
-        installBtn.hidden = false;
-        installBtn.addEventListener('click', function () {
-          installBtn.hidden = true;
-          if (deferredInstallPrompt) {
-            deferredInstallPrompt.prompt();
-            deferredInstallPrompt.userChoice.then(function (choiceResult) {
-              if (choiceResult.outcome === 'accepted') {
-                console.info('PWA installed');
-              } else {
-                console.info('PWA install dismissed');
-              }
-              deferredInstallPrompt = null;
-            });
-          }
-        });
-      }
-    });
-
-    window.addEventListener('appinstalled', function () {
-      console.info('App installed');
-      var btn = document.getElementById('install-btn');
-      if (btn) btn.hidden = true;
-    });
-
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function () {
-        navigator.serviceWorker.register('/service-worker.js', { scope: '/' }).then(function (reg) {
-          console.info('Service worker registered, scope:', reg.scope);
-        }).catch(function (err) {
-          console.info('Service worker registration failed:', err && err.message ? err.message : err);
-        });
+  if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/service-worker.js', { scope: '/' }).then(function (reg) {
+        console.info('Service worker registered, scope:', reg.scope);
+      }).catch(function (err) {
+        console.info('Service worker registration failed:', err && err.message ? err.message : err);
       });
-    }
+    });
   }
 })();
