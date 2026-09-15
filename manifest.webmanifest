@@ -1,0 +1,12 @@
+{
+  "name": "AIn't — Local AI Chat",
+  "short_name": "AIn't",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#101617",
+  "theme_color": "#101617",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

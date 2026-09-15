@@ -29,13 +29,28 @@ html, body {
   padding: 0;
 }
 
+/* Prefer dynamic viewport units where supported to avoid mobile address-bar resize issues */
+:root {
+  --app-100vh: 100vh;
+}
+@supports (height: 100dvh) {
+  :root { --app-100vh: 100dvh; }
+}
+
 body {
   background: linear-gradient(180deg, var(--bg-0), var(--bg-1));
   color: var(--text);
   font-family: var(--font);
   font-size: 14px;
   line-height: 1.55;
-  overflow: hidden;
+  /* allow natural scrolling on mobile so the virtual keyboard can resize the viewport */
+  overflow: auto;
+  min-height: var(--app-100vh);
+}
+
+/* Safe-area helpers */
+.safe-bottom-padding {
+  padding-bottom: env(safe-area-inset-bottom, 12px);
 }
 
 button, input, textarea, select {
@@ -58,7 +73,7 @@ input, textarea, select {
 
 .shell {
   position: relative;
-  height: 100vh;
+  min-height: var(--app-100vh);
   display: grid;
   grid-template-columns: 292px minmax(0, 1fr);
   transition: grid-template-columns 0.2s ease;
@@ -313,7 +328,7 @@ input, textarea, select {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  min-height: var(--app-100vh);
 }
 
 .chat-header {
@@ -475,14 +490,19 @@ input, textarea, select {
 }
 
 #composer {
-  position: relative;
+  position: sticky;
+  bottom: 0;
   flex: 0 0 auto;
   border-top: 1px solid var(--border);
-  background: rgba(14, 18, 21, 0.8);
+  background: rgba(14, 18, 21, 0.95);
   display: flex;
   gap: 10px;
   padding: 16px 18px 18px;
+  z-index: 30;
 }
+
+/* add safe-area padding so composer isn't obscured on devices with gesture bars */
+#composer { padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
 
 #composer-input {
   width: 100%;
@@ -494,6 +514,8 @@ input, textarea, select {
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 12px;
+  /* avoid being hidden behind on-screen keyboard: allow viewport to grow */
+  box-sizing: border-box;
 }
 
 #composer-send,

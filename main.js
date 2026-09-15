@@ -1012,4 +1012,13 @@
   }
 
   document.addEventListener('DOMContentLoaded', init);
+
+  // Register service worker for PWA behavior when available and on secure origins
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/service-worker.js').catch(function (err) {
+        console.info('Service worker registration failed:', err && err.message ? err.message : err);
+      });
+    });
+  }
 })();
