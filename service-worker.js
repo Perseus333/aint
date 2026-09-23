@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aint-static-v1';
+const CACHE_NAME = 'aint-static-v2';
 const ASSETS = [
   '/',
   '/index.html',

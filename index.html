@@ -49,32 +49,33 @@
       </div>
 
       <form id="composer" class="composer" autocomplete="off">
-        <textarea
-          id="composer-input"
-          class="composer-input"
-          placeholder="Send a message..."
-          rows="1"
-          aria-label="Message input"
-        ></textarea>
+        <div class="composer-inner">
+          <textarea
+            id="composer-input"
+            class="composer-input"
+            placeholder="Send a message..."
+            rows="1"
+            aria-label="Message input"
+          ></textarea>
 
-        <!-- action stack moved inside composer as a grid child -->
-        <div id="action-stack" class="action-stack" aria-hidden="false">
-          <button id="web-search-toggle" class="action-btn web-search" type="button" aria-pressed="false" title="Toggle web search">
-            <!-- lucide globe -->
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5" />
-              <path d="M2 12h20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-              <path d="M12 2v20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-            </svg>
-          </button>
+          <div id="action-stack" class="action-stack">
+            <button id="web-search-toggle" class="action-btn web-search" type="button" aria-pressed="false" aria-label="Toggle web search" title="Toggle web search">
+              <!-- globe: circle + meridian + equator -->
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" />
+                <path d="M12 3a13.5 13.5 0 0 0 0 18 13.5 13.5 0 0 0 0-18" stroke="currentColor" stroke-width="1.6" />
+                <path d="M3 12h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+              </svg>
+            </button>
 
-          <button id="composer-send" class="action-btn send" type="button" title="Send message">
-            <!-- lucide send -->
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M22 2L11 13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
-              <path d="M22 2L15 22l-4-9-9-4 20-7z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </button>
+            <button id="composer-send" class="action-btn send" type="button" aria-label="Send message" title="Send message">
+              <!-- lucide arrow-up -->
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M12 19V5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                <path d="M5 12l7-7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+          </div>
         </div>
       </form>
     </main>

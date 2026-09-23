@@ -176,7 +176,6 @@ input, textarea, select {
 }
 
 #model-select:focus-visible,
-#composer-input:focus-visible,
 .field-input:focus-visible,
 .chat-item-rename-input:focus-visible,
 #provider-name:focus-visible,
@@ -392,9 +391,15 @@ input, textarea, select {
 }
 
 .message.message-user {
-  margin-left: auto;
-  margin-right: 6px;
+  /* hug the text, cap at 60% of the stream, and stay anchored to the right edge */
+  width: fit-content;
   max-width: 60%;
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.message.message-user .message-body {
+  width: 100%;
 }
 
 .message.message-assistant {
@@ -435,6 +440,74 @@ input, textarea, select {
 
 @keyframes blink {
   to { visibility: hidden; }
+}
+
+/* Live activity indicator shown while the model is working */
+.activity-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 6px 12px 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(14, 18, 21, 0.55);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+  animation: slideUp 0.18s ease;
+}
+
+.activity-indicator[hidden] {
+  display: none;
+}
+
+.activity-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+.activity-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.activity-spinner {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid rgba(167, 192, 128, 0.25);
+  border-top-color: currentColor;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.activity-indicator[data-state="searching"] .activity-icon,
+.activity-indicator[data-state="reading"] .activity-icon {
+  color: var(--web-accent);
+}
+
+.activity-indicator[data-state="searching"] .activity-spinner,
+.activity-indicator[data-state="reading"] .activity-spinner {
+  border-color: rgba(90, 160, 214, 0.28);
+  border-top-color: currentColor;
+}
+
+.activity-indicator[data-state="done"] {
+  color: var(--accent);
+}
+
+.activity-indicator[data-state="error"] {
+  color: var(--danger);
+  border-color: rgba(230, 126, 128, 0.4);
 }
 
 .think-block {
@@ -507,140 +580,142 @@ input, textarea, select {
   padding-left: 20px;
 }
 
+/* ==================================
+   Composer (bottom message input bar)
+   ================================== */
 #composer {
   position: sticky;
   bottom: 0;
   flex: 0 0 auto;
-  border-top: 1px solid var(--border);
-  background: rgba(14, 18, 21, 0.95);
-  display: flex;
-  gap: 10px;
-  padding: 16px 18px 18px;
   z-index: 30;
+  padding: 12px 18px calc(14px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(14, 18, 21, 0.72), rgba(14, 18, 21, 0.98) 42%);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
-/* add safe-area padding so composer isn't obscured on devices with gesture bars */
-#composer { padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+.composer-inner {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 8px 8px 8px 16px;
+  background: rgba(37, 45, 49, 0.92);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  box-shadow: 0 16px 34px var(--shadow);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
 
-#composer {
-  display: grid;
-  grid-template-columns: 1fr 44px; /* fixed action column to prevent overlap */
-  gap: 12px;
-  align-items: center;
+.composer-inner:focus-within {
+  border-color: rgba(167, 192, 128, 0.5);
+  box-shadow: 0 16px 34px var(--shadow), 0 0 0 3px var(--accent-soft);
 }
 
 #composer-input {
-  width: 100%;
-  padding: 12px 14px;
-  min-height: 56px; /* match stacked buttons combined height */
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 40px;
   max-height: 200px;
-  resize: none;
-  background: rgba(37, 45, 49, 0.9);
-  border: 1px solid var(--border);
+  padding: 9px 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
   color: var(--text);
-  border-radius: 12px;
+  line-height: 1.5;
+  resize: none;
   box-sizing: border-box;
+}
+
+#composer-input::placeholder {
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+#composer-input:focus,
+#composer-input:focus-visible {
+  outline: none;
 }
 
 .action-stack {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
-  width: 44px; /* match the composer action column */
+  gap: 8px;
+  flex: 0 0 auto;
 }
 
 .action-btn {
-  width: 20px; /* slightly smaller, compact */
-  height: 20px;
-  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255,255,255,0.02);
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border);
   color: var(--text);
-  box-shadow: 0 8px 20px rgba(5,9,10,0.12);
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
 }
 
-.action-btn.send {
-  background: var(--accent);
-  color: var(--bg-1);
+.action-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.action-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.action-btn.web-search:hover:not(:disabled) {
+  color: var(--web-accent);
+  border-color: rgba(90, 160, 214, 0.5);
+  background: rgba(90, 160, 214, 0.1);
 }
 
 .action-btn.web-search.active {
   background: var(--web-accent-bg);
-  color: var(--bg-1);
-  border-color: rgba(90,160,214,0.18);
-}
-
-:root {
-  --web-accent: #5aa0d6;
-  --web-accent-bg: rgba(90,160,214,0.14);
-}
-
-
-/* vertical action stack (send + web-search) */
-.action-stack {
-  position: fixed;
-  right: 18px;
-  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  z-index: 30; /* behind the sidebar overlay (sidebar uses 70 on mobile)
-                 and above conversation content */
-}
-
-.action-btn {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid var(--border);
-  color: var(--bg-1);
-  box-shadow: 0 8px 20px rgba(5,9,10,0.28);
+  color: var(--web-accent);
+  border-color: rgba(90, 160, 214, 0.55);
+  box-shadow: 0 0 0 3px rgba(90, 160, 214, 0.12);
 }
 
 .action-btn.send {
   background: var(--accent);
-  color: var(--bg-1);
+  border-color: transparent;
+  color: var(--bg-0);
+  border-radius: 50%;
+  box-shadow: 0 8px 18px rgba(167, 192, 128, 0.28);
 }
 
 .action-btn.send:hover:not(:disabled) {
   background: var(--accent-strong);
 }
 
-.action-btn.web-search {
-  background: rgba(255,255,255,0.02);
-  color: var(--text);
+.action-btn.send:active:not(:disabled) {
+  transform: scale(0.94);
 }
 
-.action-btn.web-search.active {
-  background: var(--web-accent-bg);
-  color: var(--bg-1);
-  border-color: rgba(90,160,214,0.18);
+.action-btn.send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 :root {
   --web-accent: #5aa0d6;
-  --web-accent-bg: rgba(90,160,214,0.14);
+  --web-accent-bg: rgba(90, 160, 214, 0.16);
 }
 
-#composer-send,
 .primary-btn,
 .secondary-btn,
 .text-btn {
   border-radius: 10px;
   transition: transform 0.18s ease, opacity 0.18s ease, background 0.18s ease;
 }
-
-/* keep old absolute send fallback hidden (we now use action-stack send) */
-#composer-send[disabled] { opacity: 0.6; }
 
 
 .overlay {

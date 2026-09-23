@@ -7,8 +7,27 @@
     selectedModel: 'aichat_selected_model'
   };
 
-  var THINK_OPEN = '<think>';
+  var THINK_OPEN = ' thinking';
   var THINK_CLOSE = '</think>';
+
+  var ACTIVITY_ICONS = {
+    spinner: '<span class="activity-spinner"></span>',
+    globe: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 3a13.5 13.5 0 0 0 0 18 13.5 13.5 0 0 0 0-18" stroke="currentColor" stroke-width="1.6"/><path d="M3 12h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+    pen: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 20h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    check: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    alert: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 9v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 17h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.4 0Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>'
+  };
+
+  var ACTIVITY_STATES = {
+    connecting: { label: 'Connecting…', icon: ACTIVITY_ICONS.spinner },
+    thinking: { label: 'Thinking…', icon: ACTIVITY_ICONS.spinner },
+    searching: { label: 'Searching the web…', icon: ACTIVITY_ICONS.globe },
+    reading: { label: 'Reading sources…', icon: ACTIVITY_ICONS.globe },
+    writing: { label: 'Writing…', icon: ACTIVITY_ICONS.pen },
+    tool: { label: 'Working…', icon: ACTIVITY_ICONS.spinner },
+    done: { label: 'Done', icon: ACTIVITY_ICONS.check },
+    error: { label: 'Something went wrong', icon: ACTIVITY_ICONS.alert }
+  };
 
   var state = {
     providers: [],
@@ -884,6 +903,9 @@
     wrapper.className = 'message message-assistant';
     wrapper.dataset.id = assistantMsg.id;
 
+    var activityEl = document.createElement('div');
+    activityEl.className = 'activity-indicator';
+
     var thinkDetails = document.createElement('details');
     thinkDetails.className = 'think-block';
     thinkDetails.hidden = true;
@@ -896,23 +918,51 @@
 
     var bodyEl = document.createElement('div');
     bodyEl.className = 'message-body streaming';
+    wrapper.appendChild(activityEl);
     wrapper.appendChild(thinkDetails);
     wrapper.appendChild(bodyEl);
     el.messages.appendChild(wrapper);
     scrollMessagesToBottom();
 
+    var activityFinished = false;
+    var hadError = false;
+
+    function setActivity(name, customLabel) {
+      var def = ACTIVITY_STATES[name] || ACTIVITY_STATES.connecting;
+      activityEl.dataset.state = name;
+      activityEl.innerHTML = '<span class="activity-icon">' + def.icon + '</span>' +
+        '<span class="activity-label">' + escapeHtml(customLabel || def.label) + '</span>';
+      activityEl.hidden = false;
+    }
+
+    function appendThinking(chunk) {
+      assistantMsg.thinking += chunk;
+      if (thinkDetails.hidden) thinkDetails.hidden = false;
+      thinkBody.textContent = assistantMsg.thinking;
+      if (!activityFinished) setActivity('thinking');
+      scrollMessagesToBottom();
+    }
+
+    function appendMain(chunk) {
+      assistantMsg.content += chunk;
+      bodyEl.textContent = assistantMsg.content;
+      if (!activityFinished) setActivity('writing');
+      scrollMessagesToBottom();
+    }
+
+    function noteToolName(name) {
+      var lower = String(name || '').toLowerCase();
+      if (!lower) return;
+      if (lower.indexOf('search') !== -1) setActivity('searching');
+      else if (lower.indexOf('fetch') !== -1 || lower.indexOf('read') !== -1 || lower.indexOf('browse') !== -1) setActivity('reading');
+      else setActivity('tool', 'Using ' + name);
+    }
+
+    setActivity('connecting');
+
     var processor = createTagStreamProcessor({
-      onMain: function (chunk) {
-        assistantMsg.content += chunk;
-        bodyEl.textContent = assistantMsg.content;
-        scrollMessagesToBottom();
-      },
-      onThink: function (chunk) {
-        assistantMsg.thinking += chunk;
-        if (thinkDetails.hidden) thinkDetails.hidden = false;
-        thinkBody.textContent = assistantMsg.thinking;
-        scrollMessagesToBottom();
-      }
+      onMain: appendMain,
+      onThink: appendThinking
     });
 
     setStreaming(true);
@@ -973,7 +1023,19 @@
             }
 
             var choice = json.choices && json.choices[0];
-            var delta = choice && (choice.delta ? choice.delta.content : choice.text);
+            var deltaObj = choice && choice.delta;
+            var delta = deltaObj ? deltaObj.content : (choice && choice.text);
+            var reasoning = deltaObj && (deltaObj.reasoning || deltaObj.reasoning_content);
+            if (reasoning) appendThinking(reasoning);
+            if (deltaObj && Array.isArray(deltaObj.annotations) && deltaObj.annotations.length) {
+              if (!activityFinished) setActivity('searching');
+            }
+            if (deltaObj && Array.isArray(deltaObj.tool_calls)) {
+              for (var tc = 0; tc < deltaObj.tool_calls.length; tc++) {
+                var fn = deltaObj.tool_calls[tc] && deltaObj.tool_calls[tc].function;
+                if (fn && fn.name) noteToolName(fn.name);
+              }
+            }
             if (delta) processor.push(delta);
           }
           return pump();
@@ -985,6 +1047,7 @@
       processor.flush();
     }).catch(function (err) {
       processor.flush();
+      hadError = true;
       var prefix = assistantMsg.content ? '\n\n' : '';
       assistantMsg.content += prefix + '⚠️ Error: ' + (err && err.message ? err.message : 'Unknown error');
       bodyEl.textContent = assistantMsg.content;
@@ -993,6 +1056,16 @@
       bodyEl.classList.remove('streaming');
       bodyEl.innerHTML = renderMarkdown(assistantMsg.content);
       renderMathInScope(wrapper);
+      if (thinkBody.textContent) summary.textContent = 'Thought process';
+      activityFinished = true;
+      if (hadError) {
+        setActivity('error');
+      } else {
+        setActivity('done');
+        setTimeout(function () {
+          if (activityEl.parentNode) activityEl.parentNode.removeChild(activityEl);
+        }, 1600);
+      }
       setStreaming(false);
       saveChats();
       scrollMessagesToBottom();
